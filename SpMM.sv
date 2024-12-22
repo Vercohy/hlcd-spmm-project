@@ -17,6 +17,15 @@ module add_(
         out.data <= a.data + b.data;
     end
 endmodule
+module num_(
+    input logic clock,
+    input logic num_in,
+    output logic num_out
+);
+    always_ff  @(posedge clock) begin
+        num_out <= num_in /2;
+    end
+endmodule
 
 module mul_(
     input   logic   clock,
@@ -42,13 +51,29 @@ module RedUnit(
     // num_el 总是赋值为 N
     assign num_el = `N;
     // delay 你需要自己为其赋值，表示电路的延迟
-    assign delay = 0;
+    assign delay = `lgN;
 
+    data_t addertree[`lgN:0][`N-1:0];
+    assign addertree[0] = data;
     generate
-        for(genvar i = 0; i < `N; i++) begin
-            assign out_data[i] = 0;
+        for (genvar i = 0; i < `lgN; i++) begin
+            for (genvar j = 0; j < (`N >> (i+1)); j++) begin
+                add_ adder_unit(
+                    .clock(clock),
+                    .a(addertree[i][j*2]),
+                    .b(addertree[i][j*2+1]),
+                    .out(addertree[i+1][j])
+                );
+            end
         end
     endgenerate
+
+    generate
+        for (genvar i = 0; i < `N; i++) begin
+            assign out_data[i] = addertree[`lgN][`N-i-1];
+        end
+    endgenerate
+
 endmodule
 
 module PE(
@@ -66,11 +91,34 @@ module PE(
     // num_el 总是赋值为 N
     assign num_el = `N;
     // delay 你需要自己为其赋值，表示电路的延迟
-    assign delay = 0;
-
+    assign delay = `lgN + 1;
+    data_t data[`N-1:0];
+    logic split[`N-1:0];
+    logic [`lgN-1:0] out_idx[`N-1:0];
+    data_t out_redunit[`N-1:0];
     generate
         for(genvar i = 0; i < `N; i++) begin
-            assign out[i] = 0;
+            mul_ mul_unit(
+                .clock(clock),
+                .a(lhs_data[i]),
+                .b(rhs[i]),
+                .out(data[i])
+            );
+        end
+    endgenerate
+    RedUnit red_unit(
+        .clock(clock),
+        .reset(reset),
+        .data(data),
+        .split(split),
+        .out_idx(out_idx),
+        .out_data(out_redunit),
+        .delay(delay_redunit),
+        .num_el(num_el)
+    );
+    generate
+        for(genvar i = 0; i < `N; i++) begin
+            assign out[i] = out_redunit[`N-1];
         end
     endgenerate
 endmodule
