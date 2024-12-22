@@ -149,11 +149,119 @@ module SpMM(
 );
     // num_el 总是赋值为 N
     assign num_el = `N;
-
     assign lhs_ready_ns = 0;
     assign lhs_ready_ws = 0;
     assign lhs_ready_os = 0;
     assign lhs_ready_wos = 0;
-    assign rhs_ready = 0;
     assign out_ready = 0;
+    // RHS INPUT CTRL
+    data_t rhs_buffer [1:0][`N-1:0][`N-1:0];
+    logic rhs_state;
+    logic [1:0] rhs_idx;
+    //logic rhs_buffer_state [1:0];
+    logic rhs_buffer_state;
+    logic buffer_choose;
+    localparam RHS_EMPTY = 0;
+    localparam RHS_BUSY = 1;
+    localparam RHS_FILLED = 2;
+    always_ff @(posedge clock) begin
+        if (reset) begin
+            rhs_idx <= 0;
+        end
+        else if (rhs_start || rhs_state == RHS_BUSY) begin
+            rhs_idx <= rhs_idx + 1;
+        end
+        else rhs_idx <= 0;
+    end
+    always_ff @(posedge clock) begin
+        if (reset) begin
+            rhs_state <= RHS_EMPTY;
+        end
+        else if (rhs_start) begin
+            rhs_state <= RHS_BUSY;
+        end
+        else if (rhs_state == RHS_BUSY && rhs_idx == `N/4-1) begin
+            rhs_state <= RHS_FILLED;
+        end
+        else if (rhs_state == RHS_FILLED) begin
+            rhs_state <= RHS_EMPTY;
+        end
+    end
+    always_ff @(posedge clock) begin
+        if (reset) begin
+            //rhs_buffer_state[0] <= RHS_EMPTY;
+            //rhs_buffer_state[1] <= RHS_EMPTY;
+            //buffer_choose <= 0;
+            rhs_buffer_state <= RHS_EMPTY;
+            //for (int i = 0; i < 2; i++) begin
+                for (int j = 0; j < `N; j++) begin
+                    for (int k = 0; k < `N; k++) begin
+                        rhs_buffer[j][k] <= 0;
+                    end
+                end
+            //end
+        end
+        else if (rhs_start || rhs_state == RHS_BUSY) begin
+            rhs_buffer_state <= RHS_BUSY;
+            for (int i = 0; i < 3; i++) begin
+                for (int j = 0; j < `N; j++) begin
+                    //rhs_buffer[buffer_choose][i + 4*rhs_idx][j] <= rhs_data[i][j];
+                    rhs_buffer[i + 4*rhs_idx][j] <= rhs_data[i][j];
+                end
+            end
+        end
+        else if (rhs_state == RHS_FILLED) begin
+            rhs_buffer_state <= RHS_FILLED;
+        end
+    end
+    assign rhs_ready = (rhs_state == RHS_EMPTY);
+
+    //LHS INPUT CTRL
+    logic lhs_state;
+    logic [1:0] lhs_idx;   
+    localparam LHS_EMPTY = 0; 
+    localparam LHS_BUSY = 1;
+    localparam LHS_FILLED = 2;
+    always_ff @(posedge clock) begin
+        if (reset) begin
+            lhs_idx <= 0;
+        end
+        else if (lhs_start || lhs_state == LHS_BUSY) begin
+            lhs_idx <= lhs_idx + 1;
+        end
+        else lhs_idx <= 0;
+    end
+    always_ff @(posedge clock) begin
+        if (reset || rhs_state == RHS_FILLED) begin //Fix this
+            lhs_state <= LHS_EMPTY;
+        end
+        else if (lhs_start) begin
+            lhs_state <= LHS_BUSY;
+        end
+        else if (lhs_state == LHS_BUSY && lhs_idx == `N-1) begin
+            lhs_state <= LHS_FILLED;
+            rhs_buffer_state <= RHS_EMPTY;
+        end
+        else if (lhs_state == LHS_FILLED) begin
+            lhs_state <= LHS_EMPTY;
+        end
+    end
+    assign lhs_ready_ns = (lhs_state == LHS_EMPTY && rhs_buffer_state == RHS_FILLED);
+
+    //RHS Slicing
+    data_t rhs_data_slice[`N-1:0];
+    generate
+
+    endgenerate
+
+    // OUTPUT CTRL
+     
+    
+    generate
+        for (genvar i = 0; i < 3; i++) begin
+            for (genvar j = 0; j < `N; j++) begin
+                assign out_data[i][j] = 0;
+            end
+        end
+    endgenerate
 endmodule
