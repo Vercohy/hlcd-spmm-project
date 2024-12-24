@@ -369,7 +369,7 @@ struct NsOnepass: public Test {
     bool run() override {
         dut->timeout = n * 10;
         LHS lhs = LHS::new_with(false, false, &LHS::init_full, dut->n);
-        auto rhs = gen_rhs(dut->n, {1, 2});
+        auto rhs = gen_rhs(dut->n, {1, 255});
         dut->send_rhs(rhs); dut->step();
         dut->send_lhs(lhs); dut->step();
         std::vector<int> out;

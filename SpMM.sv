@@ -1,4 +1,5 @@
 /* verilator lint_off WIDTHEXPAND */
+/* verilator lint_off WIDTHTRUNC */
 `ifndef N
 `define N              16
 `endif
@@ -18,15 +19,6 @@ module add_(
         out.data <= a.data + b.data;
     end
 endmodule
-module num_(
-    input logic clock,
-    input logic num_in,
-    output logic num_out
-);
-    always_ff  @(posedge clock) begin
-        num_out <= num_in /2;
-    end
-endmodule
 
 module mul_(
     input   logic   clock,
@@ -38,6 +30,58 @@ module mul_(
         out.data <= a.data * b.data;
     end
 endmodule
+
+module RedUnit_Pfxsum(
+    input   logic               clock,
+                                reset,
+    input   data_t              data[`N-1:0],
+    input   logic               split[`N-1:0],
+    input   logic [`lgN-1:0]    out_idx[`N-1:0],
+    output  data_t              out_data[`N-1:0],
+    output  int                 delay,
+    output  int                 num_el
+);
+    // num_el 总是赋值为 N
+    assign num_el = `N;
+    // delay 你需要自己为其赋值，表示电路的延迟
+    assign delay = `lgN;
+    data_t pfxsum [`lgN:0][`N-1:0];
+    logic [`lgN-1:0] shift_idx;
+    data_t zero;
+    assign zero.data = 0;
+    assign pfxsum[0] = data;
+    generate 
+        for (genvar i = 1; i <= `lgN; i++) begin
+            assign shift_idx = 1 << (i-1);
+            for (genvar j = 0; j < `N; j++) begin
+                add_ adder_unit(
+                    .clock(clock),
+                    .a(pfxsum[i-1][j]),
+                    .b(j<shift_idx? zero : pfxsum[i-1][j-shift_idx]),
+                    .out(pfxsum[i][j])
+                );
+            end
+        end
+    endgenerate
+    generate
+        for (genvar i = 0; i < `N; i++) begin
+            assign out_data[i] = pfxsum[`lgN][i];
+        end
+    endgenerate
+    /*
+    generate
+        for (genvar i = 0; i < `N; i++) begin
+            add_ minusunit(
+                .clock(clock),
+                .a(pfxsum[`lgN][out_idx[i]]),
+                .b(i==0? zero : -pfxsum[`lgN][out_idx[i-1]]),
+                .out(out_data[i])
+            );
+        end
+    endgenerate
+    */
+endmodule
+
 
 module RedUnit(
     input   logic               clock,
@@ -303,7 +347,7 @@ module SpMM(
 //OUTPUT BUFFER CTRL
     data_t out_buffer[`N-1:0][`N-1:0];
     data_t shift_temp[`N-1:0];
-    data_t out_temp[`N-1:0];
+    data_t out_temp[`N-1:0][`N-1:0];
     logic [`lgN-1:0] out_buf_idx;
     logic [1:0] out_buffer_state;
     localparam OUTPUT_BUF_EMPTY = 0;
@@ -363,11 +407,11 @@ module SpMM(
                 .lhs_col(lhs_col),
                 .lhs_data(lhs_data),
                 .rhs(rhs_buffer[i]),
-                .out(out_temp),
+                .out(out_temp[i]),
                 .delay(delay),
                 .num_el(num_el)
             );
-            assign out_buffer[`N-1][i].data = out_temp[0].data;
+            assign out_buffer[`N-1][i].data = out_temp[i][0].data;
         end
     endgenerate
 
