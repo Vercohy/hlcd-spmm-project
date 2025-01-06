@@ -570,7 +570,6 @@ module SpMM(
             for (int i = 0; i < 4; i++) begin
                 for (int j = 0; j < `N; j++) begin
                     out_data[i][j].data <= out_buffer[i+out_buf_idx*4][j].data;
-                    //out_data[i][j].data <= out_buffer[i+4][j].data;
                 end
             end
         end
